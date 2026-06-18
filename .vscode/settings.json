@@ -1,0 +1,7 @@
+{
+  // 終端機整合設定
+  // 確保新開啟的終端機一律在專案根目錄
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  // 讓終端機保持開啟，方便重複執行
+  "terminal.integrated.persistSessionRevivalProcess": true
+}
