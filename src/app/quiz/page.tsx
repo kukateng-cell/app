@@ -5,6 +5,7 @@ import Link from "next/link";
 import { generateQuiz } from "@/data/pinyin";
 import type { QuizQuestion } from "@/data/pinyin";
 import { saveQuizRecord, type QuizAnswerRecord } from "@/lib/quiz-history";
+import { saveQuizRecordCloud } from "@/lib/quiz-history-cloud";
 
 export default function QuizPage() {
   const [questions, setQuestions] = useState<QuizQuestion[] | null>(null);
@@ -14,7 +15,17 @@ export default function QuizPage() {
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [saveHint, setSaveHint] = useState<string | null>(null);
   const hasSavedRef = useRef(false);
+
+  // 載入登入狀態
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setLoggedIn(d.loggedIn === true))
+      .catch(() => {});
+  }, []);
 
   const startQuiz = () => {
     setQuestions(generateQuiz());
@@ -55,9 +66,21 @@ export default function QuizPage() {
         explanation: q.explanation,
         isCorrect: selectedAnswers[i] === q.answer,
       }));
-      saveQuizRecord(score, questions.length, records);
+
+      // 登入 → 存雲端；未登入 → 存 localStorage
+      if (loggedIn) {
+        saveQuizRecordCloud(score, questions.length, records).then((ok) => {
+          setSaveHint(ok ? "✓ 已記錄到您的帳號" : "✗ 記錄儲存失敗");
+        });
+      } else {
+        // 用 microtask 延遲 setState，避免 effect 內同步觸發渲染
+        queueMicrotask(() => {
+          saveQuizRecord(score, questions.length, records);
+          setSaveHint("✓ 已記錄（本機）");
+        });
+      }
     }
-  }, [currentIndex, questions, selectedAnswers, score]);
+  }, [currentIndex, questions, selectedAnswers, score, loggedIn]);
 
   const handleNext = () => {
     if (currentIndex + 1 >= questions!.length) {
@@ -119,7 +142,20 @@ export default function QuizPage() {
       <div className="mx-auto flex max-w-2xl flex-col items-center px-4 py-20 text-center">
         <div className="mb-6 text-7xl">{result.emoji}</div>
         <h1 className="mb-2 text-4xl font-bold text-gray-900">测验完成！</h1>
-        <p className="mb-8 text-lg text-gray-500">{result.message}</p>
+        <p className="mb-4 text-lg text-gray-500">{result.message}</p>
+
+        {/* 記錄儲存狀態 / 登入提示 */}
+        {saveHint && (
+          <p className="mb-4 text-sm text-gray-500">{saveHint}</p>
+        )}
+        {!loggedIn && (
+          <Link
+            href="/login"
+            className="mb-4 inline-block rounded-full bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+          >
+            🔑 登入以永久儲存記錄（換裝置也不會遺失）
+          </Link>
+        )}
 
         {/* 分数圆环 */}
         <div className="relative mb-8 flex h-40 w-40 items-center justify-center">

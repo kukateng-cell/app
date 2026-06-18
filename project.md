@@ -15,7 +15,9 @@
 | 🎙️ 语音发音  | 使用浏览器内建的 Web Speech API，点击即可听到标准中文发音    |
 | 📚 四大模块  | 声母（23个）、韵母（24个）、整体认读音节（16个）、声调（5种）|
 | 🎯 互动测验  | 随机出题、即时反馈、进度追踪、分数统计                      |
-| 📱 响应式设计 | 支援桌面与移动设备，随时随地学习                            |
+| � Email 登入 | Email 验证码（OTP）登入，无需密码，Gmail 寄送验证码          |
+| ☁️ 云端记录 | 登入后测验记录存在资料库，跨装置同步，换浏览器也不遗失       |
+| �📱 响应式设计 | 支援桌面与移动设备，随时随地学习                            |
 | 🎨 视觉引导  | 每个模块使用专属配色，帮助记忆与区分                        |
 
 ---
@@ -29,8 +31,10 @@
 | **Tailwind CSS**  | v4      | 实用优先的 CSS 框架           |
 | **React**         | 19.2.4  | UI 建构库                     |
 | **Web Speech API**| 内建    | 浏览器原生语音合成（TTS）     |
-| **Prisma**        | 7.8.0   | 型别安全的 ORM（预留扩展用）  |
-| **PostgreSQL**    | —       | 关联式资料库（预留扩展用）    |
+| **Prisma**        | 7.8.0   | 型别安全的 ORM（使用者/测验记录）|
+| **PostgreSQL**    | Neon 云端 | 关联式资料库（云端记录储存）  |
+| **nodemailer**    | —       | 经由 Gmail SMTP 寄送 OTP 验证码 |
+| **jose**          | —       | JWT 签署与验证（session cookie 加密）|
 
 ---
 
@@ -43,19 +47,27 @@ elegant-clock-3/
 │   │   ├── layout.tsx                # 全局 Layout（Navbar + Footer）
 │   │   ├── page.tsx                  # 首页（Hero + 模块导览 + 统计）
 │   │   ├── globals.css               # 全局样式与 Tailwind 设定
+│   │   ├── actions/
+│   │   │   └── auth.ts               # 登入 Server Actions（寄码/验证/登出）
+│   │   ├── api/
+│   │   │   ├── auth/me/route.ts      # 取得登入状态
+│   │   │   ├── quiz/migrate/route.ts # 本机→云端资料搬移
+│   │   │   └── quiz/records/         # 测验记录 CRUD API（需登入）
 │   │   ├── learn/
 │   │   │   ├── page.tsx              # 学习总览页
 │   │   │   ├── initials/page.tsx     # 声母学习页
 │   │   │   ├── finals/page.tsx       # 韵母学习页
 │   │   │   ├── syllables/page.tsx    # 整体认读音节学习页
 │   │   │   └── tones/page.tsx        # 声调学习页
+│   │   ├── login/
+│   │   │   └── page.tsx              # 登入页（Email OTP 两阶段验证）
 │   │   ├── quiz/
 │   │   │   └── page.tsx              # 互动测验页
 │   │   └── history/
 │   │       └── page.tsx              # 测验记录页（成绩历史与逐题复习）
 │   │
 │   ├── components/                   # 可重用元件
-│   │   ├── Navbar.tsx                # 导览列（含移动端选单）
+│   │   ├── Navbar.tsx                # 导览列（含移动端选单、登入/登出）
 │   │   ├── Footer.tsx                # 页脚
 │   │   ├── PronounceButton.tsx       # 发音按钮（Web Speech API）
 │   │   └── PinyinCard.tsx            # 拼音卡片（展示拼音、范例字、词组）
@@ -64,20 +76,24 @@ elegant-clock-3/
 │   │   └── pinyin.ts                 # 拼音资料库与测验出题引擎
 │   │
 │   ├── lib/
-│   │   ├── prisma.ts                 # Prisma Client 单例（预留扩展用）
-│   │   └── quiz-history.ts           # 测验记录工具库（localStorage 储存 / 统计）
+│   │   ├── prisma.ts                 # Prisma Client 单例
+│   │   ├── session.ts                # JWT session 管理（加密 cookie）
+│   │   ├── email.ts                  # Gmail SMTP 寄送验证码
+│   │   ├── quiz-history.ts           # 测验记录工具库（localStorage 储存 / 统计）
+│   │   └── quiz-history-cloud.ts     # 云端测验记录工具库（经 API 存取）
 │   │
 │   └── generated/                    # Prisma 自动生成的程式码
 │       └── prisma/
 │
 ├── prisma/
-│   └── schema.prisma                 # 资料库 Schema 定义
+│   └── schema.prisma                 # 资料库 Schema（User / OtpCode / QuizRecord）
 │
 ├── public/                           # 静态资源
-├── .env                              # 环境变数
+├── .env                              # 环境变数（DATABASE_URL / SMTP / SESSION_SECRET）
 ├── next.config.ts                    # Next.js 设定
 ├── tsconfig.json                     # TypeScript 设定
 ├── docs/
+│   ├── LOGIN_SETUP.md               # 登入系统设定教学
 │   └── project.md                   # 测验记录功能开发 Checklist
 ├── package.json                      # 专案依赖与脚本
 └── README.md                         # 专案说明
@@ -144,15 +160,41 @@ elegant-clock-3/
   - 答题明细一览（✓/✕）
   - 依分数显示鼓励讯息
   - 提供「再来一次」、「去复习」与「查看记录」按钮
+- **记录储存（依登入状态自动切换）**：
+  - 🔐 已登入：记录存到云端资料库（跨装置同步）
+  - 👤 未登入：记录存到本机 `localStorage`，并显示登入提示
 
-### 8. 📊 测验记录页（`/history`）
+### 8. 🔐 登入页（`/login`）
+
+采用 **Email 验证码（OTP）登入**，无需密码，任何 email 皆可使用。
+
+**两阶段验证流程：**
+
+1. **步骤一（输入 email）**：使用者输入 email → 系统寄送 6 位数验证码
+2. **步骤二（输入验证码）**：使用者输入验证码 → 验证成功即登入
+
+**功能特色：**
+
+- **Gmail 寄信**：透过 nodemailer + Gmail 应用程式密码发送验证码邮件（含 HTML 美化版型）
+- **安全防护**：
+  - 验证码 10 分钟内有效
+  - 同一 email 60 秒内只能寄送一次（rate-limit）
+  - 验证码使用后即失效
+- **使用体验**：
+  - 60 秒倒计时防止重复寄送
+  - 验证码自动聚焦、数字键盘输入
+  - 错误讯息即时反馈
+- **登入后**：自动跳转至记录页，并显示搬移本机资料的提示
+
+### 9. 📊 测验记录页（`/history`）
 
 记录使用者每次测验的成绩与逐题作答明细，方便追踪学习进度与复习错题。
 
-**技术决策：使用浏览器 `localStorage`（非资料库）**
-- 免设定、即开即用、无需后端 API
-- 资料仅存在当前浏览器，换装置 / 清快取会消失
-- 未来可无痛迁移至 Prisma + PostgreSQL（串接帐号系统时）
+**双模式资料来源（依登入状态）：**
+
+- 🔐 **已登入**：从云端资料库读取（跨装置同步，标记「☁️ 云端同步」）
+- 👤 **未登入**：从本机 `localStorage` 读取
+- 🔄 **自动搬移**：首次登入时，自动将本机既有记录上传到该使用者帐号，并清除本机
 
 **功能特色：**
 
@@ -212,6 +254,19 @@ npm run dev
 # 访问 http://localhost:3000
 ```
 
+### 登入系统设定（选用）
+
+登入与云端记录功能需要额外设定资料库与 Gmail。完整步骤请见 [`docs/LOGIN_SETUP.md`](docs/LOGIN_SETUP.md)，摘要如下：
+
+1. **设定 `.env`**（3 个环境变数）：
+   - `DATABASE_URL`：Neon 云端 PostgreSQL 连线字串
+   - `SMTP_USER` / `SMTP_PASS`：Gmail 地址与应用程式密码
+   - `SESSION_SECRET`：JWT 加密密钥
+2. **建立资料表**：`npm run db:push`
+3. **启动测试**：登入页寄送验证码 → 完成测验 → 记录同步到云端
+
+> 💡 不设定登入系统时，测验记录仍会存到本机 `localStorage`，基础学习功能不受影响。
+
 ### 可用脚本
 
 | 指令             | 说明                             |
@@ -221,6 +276,8 @@ npm run dev
 | `npm run start`  | 启动生产服务器                   |
 | `npm run lint`   | 执行 ESLint 程式码检查           |
 | `npm run db:push`| 同步 Schema 至资料库（Prisma）   |
+| `npm run db:migrate` | 建立并套用资料库 Migration |
+| `npm run db:studio` | 启动 Prisma Studio（资料库视觉化管理） |
 
 ---
 
@@ -276,6 +333,60 @@ API:
 
 - 记录上限：最多 50 笔，超过自动截断
 - 每笔记录包含完整题目快照，可在事后复习
+- 未登入时使用此工具库；登入后改用 `quiz-history-cloud.ts`
+
+### 云端测验记录工具库（`src/lib/quiz-history-cloud.ts`）
+
+登入后透过 API 存取云端测验记录，介面与 `quiz-history.ts` 对齐，方便页面切换资料来源。
+
+```
+API:
+  - saveQuizRecordCloud(score, total, answers)  // 新增一笔到云端
+  - getQuizHistoryCloud()                       // 取得云端所有记录
+  - deleteQuizRecordCloud(id)                   // 删除云端单笔
+  - clearQuizHistoryCloud()                     // 清除云端全部
+  - migrateLocalToCloud(records)                // 本机记录批次搬移到云端
+```
+
+### Session 管理（`src/lib/session.ts`）
+
+使用 **jose** 签署 JWT，存在 `httpOnly` cookie 中管理登入状态。
+
+```
+API:
+  - createSession(userId, email)  // 建立 JWT 并写入 cookie（登入时呼叫）
+  - getSession()                  // 读取并验证当前 session
+  - getCurrentUserId()            // 取得当前登入使用者 ID（API 鉴权用）
+  - deleteSession()               // 删除 cookie（登出时呼叫）
+```
+
+- Cookie 选项：`httpOnly`、`sameSite=lax`、生产环境启用 `secure`
+- 过期时间：7 天
+- 密钥由环境变数 `SESSION_SECRET` 提供
+
+### Email 寄送（`src/lib/email.ts`）
+
+使用 **nodemailer** 经由 Gmail SMTP 寄送 OTP 验证码邮件。
+
+- 认证：`SMTP_USER`（Gmail 地址）+ `SMTP_PASS`（应用程式密码）
+- 提供 HTML 美化版型（含品牌 logo、验证码醒目显示、过期提醒）
+- transporter 建立后快取，避免重复连线
+
+### 登入 Server Actions（`src/app/actions/auth.ts`）
+
+OTP 登入的核心逻辑，透过 `useActionState` 在表单中呼叫。
+
+```
+Actions:
+  - sendCodeAction(state, formData)    // 步骤一：产生验证码并寄信
+  - verifyCodeAction(state, formData)  // 步骤二：验证码校验、建立使用者、登入
+  - logoutAction()                     // 登出
+```
+
+- **Upssert 使用者**：验证成功时自动建立或取得使用者帐号
+- **rate-limit**：同一 email 60 秒内只能寄送一次验证码
+- **验证码生命周期**：10 分钟有效，使用后标记为 `used`
+- **登入后**：建立 session cookie 并跳转至记录页
 
 ---
 
@@ -341,19 +452,66 @@ interface QuizAnswerRecord {
 }
 ```
 
+### 资料库模型（Prisma Schema）
+
+登入系统与云端记录使用以下三个资料表，定义于 `prisma/schema.prisma`：
+
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  otpCodes    OtpCode[]
+  quizRecords QuizRecord[]
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String          // 6 位数验证码
+  expiresAt DateTime        // 过期时间
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  @@index([email, code])
+}
+
+model QuizRecord {
+  id        String   @id @default(cuid())
+  answers   String   // JSON 字串（逐题明细）
+  score     Int
+  total     Int
+  percentage Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId, createdAt])
+}
+```
+
 ---
 
 ## 🔮 未来展望
 
+- [x] ~~将测验记录迁移至 Prisma + PostgreSQL（搭配帐号系统，跨装置同步）~~ ✅ 已完成
+- [x] ~~新增 Email 帐号登入系统~~ ✅ 已完成
 - [ ] 增加拼音拼写练习（拼读组合练习）
-- [ ] 将测验记录迁移至 Prisma + PostgreSQL（搭配帐号系统，跨装置同步）
 - [ ] 新增「错题本」：自动汇整历史错题供集中复习
 - [ ] 增加更多题型的测验（听力辨识、填空等）
 - [ ] 支援繁简体切换
 - [ ] 加入语音辨识功能，让学习者练习发音并即时纠正
 - [ ] 新增学习成就系统与徽章奖励
-- [ ] 测验记录匯出 / 匯入（JSON 格式），方便跨装置转移
 - [ ] 图表化学习曲线（折线图显示成绩趋势）
+- [ ] 支援 Google OAuth 一键登入（除现有 OTP 外）
+- [ ] 加入使用者个人资料编辑（暱称、头像）
 
 ---
 

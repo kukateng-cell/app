@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { logoutAction } from "@/app/actions/auth";
 
 const navLinks = [
   { href: "/", label: "首页" },
@@ -14,6 +15,19 @@ const navLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<{ loggedIn: boolean; email: string | null }>(
+    { loggedIn: false, email: null }
+  );
+
+  // 載入登入狀態
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then(setUser)
+      .catch(() => {});
+  }, [pathname]); // 每次切換頁面重新檢查（處理剛登入的情況）
+
+  const emailName = user.email ? user.email.split("@")[0] : null;
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/80 backdrop-blur-md">
@@ -47,6 +61,33 @@ export default function Navbar() {
               </Link>
             );
           })}
+
+          {/* 登入 / 使用者區塊 */}
+          {user.loggedIn ? (
+            <div className="ml-2 flex items-center gap-2 border-l border-gray-200 pl-3">
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700"
+                title={user.email ?? ""}
+              >
+                {emailName?.[0]?.toUpperCase() ?? "U"}
+              </span>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                >
+                  登出
+                </button>
+              </form>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="ml-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
+            >
+              登入
+            </Link>
+          )}
         </div>
 
         {/* Mobile hamburger */}
@@ -82,6 +123,35 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {/* 登入 / 使用者區塊（手機版） */}
+          <div className="border-t border-gray-100">
+            {user.loggedIn ? (
+              <div className="flex items-center justify-between px-4 py-3">
+                <span className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-700">
+                    {emailName?.[0]?.toUpperCase() ?? "U"}
+                  </span>
+                  {emailName}
+                </span>
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50"
+                  >
+                    登出
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="block bg-emerald-500 px-4 py-3 text-center text-sm font-semibold text-white"
+              >
+                登入
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>

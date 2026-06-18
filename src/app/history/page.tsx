@@ -10,6 +10,12 @@ import {
   formatDate,
   type QuizRecord,
 } from "@/lib/quiz-history";
+import {
+  getQuizHistoryCloud,
+  deleteQuizRecordCloud,
+  clearQuizHistoryCloud,
+  migrateLocalToCloud,
+} from "@/lib/quiz-history-cloud";
 
 export default function HistoryPage() {
   const [history, setHistory] = useState<QuizRecord[]>([]);
@@ -21,28 +27,93 @@ export default function HistoryPage() {
   });
   const [mounted, setMounted] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [migrateMsg, setMigrateMsg] = useState<string | null>(null);
 
-  // 载入记录
+  // 載入記錄（依登入狀態選擇資料來源）
+  async function refresh() {
+    if (loggedIn) {
+      const cloudRecords = await getQuizHistoryCloud();
+      setHistory(cloudRecords);
+      setStats(computeStats(cloudRecords));
+    } else {
+      const localRecords = getQuizHistory();
+      setHistory(localRecords);
+      setStats(getQuizStats());
+    }
+  }
+
+  // 從記錄陣列計算統計（雲端記錄用）
+  function computeStats(records: QuizRecord[]) {
+    if (records.length === 0) {
+      return { totalAttempts: 0, averageScore: 0, bestScore: 0, latestScore: 0 };
+    }
+    const ps = records.map((r) => r.percentage);
+    return {
+      totalAttempts: records.length,
+      averageScore: Math.round(ps.reduce((a, b) => a + b, 0) / ps.length),
+      bestScore: Math.max(...ps),
+      latestScore: records[0].percentage,
+    };
+  }
+
   useEffect(() => {
-    refresh();
-    setMounted(true);
+    (async () => {
+      // 先檢查登入狀態
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        const isLogged = data.loggedIn === true;
+        setLoggedIn(isLogged);
+
+        if (isLogged) {
+          // 登入：載入雲端，並嘗試搬移 localStorage 舊資料
+          const localRecords = getQuizHistory();
+          if (localRecords.length > 0) {
+            const n = await migrateLocalToCloud(localRecords);
+            if (n > 0) {
+              setMigrateMsg(`✓ 已將 ${n} 筆本機記錄搬移到您的帳號`);
+              clearQuizHistory(); // 搬移成功後清除本機
+            }
+          }
+          const cloudRecords = await getQuizHistoryCloud();
+          setHistory(cloudRecords);
+          setStats(computeStats(cloudRecords));
+        } else {
+          // 未登入：讀 localStorage
+          const localRecords = getQuizHistory();
+          setHistory(localRecords);
+          setStats(getQuizStats());
+        }
+      } catch {
+        // 失敗則退回 localStorage
+        const localRecords = getQuizHistory();
+        setHistory(localRecords);
+        setStats(getQuizStats());
+      }
+      setMounted(true);
+      setLoading(false);
+    })();
   }, []);
 
-  function refresh() {
-    setHistory(getQuizHistory());
-    setStats(getQuizStats());
-  }
-
-  function handleDelete(id: string) {
-    deleteQuizRecord(id);
+  async function handleDelete(id: string) {
+    if (loggedIn) {
+      await deleteQuizRecordCloud(id);
+    } else {
+      deleteQuizRecord(id);
+    }
     refresh();
   }
 
-  function handleClearAll() {
-    if (confirm("确定要清除所有测验记录吗？此操作无法复原。")) {
+  async function handleClearAll() {
+    if (!confirm("确定要清除所有测验记录吗？此操作无法复原。")) return;
+    if (loggedIn) {
+      await clearQuizHistoryCloud();
+    } else {
       clearQuizHistory();
-      refresh();
     }
+    refresh();
   }
 
   function toggleExpand(id: string) {
@@ -50,7 +121,7 @@ export default function HistoryPage() {
   }
 
   // SSR 安全的载入画面
-  if (!mounted) {
+  if (!mounted || loading) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
         <div className="text-4xl">⏳</div>
@@ -58,6 +129,21 @@ export default function HistoryPage() {
       </div>
     );
   }
+
+  // 未登入提示橫幅
+  const loginBanner = !loggedIn && history.length > 0 ? (
+    <div className="mb-6 flex flex-col items-center justify-between gap-3 rounded-xl bg-emerald-50 px-5 py-4 sm:flex-row">
+      <p className="text-sm text-emerald-800">
+        🔑 登入後可將記錄永久儲存在雲端，換裝置也不會遺失
+      </p>
+      <Link
+        href="/login"
+        className="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
+      >
+        登入
+      </Link>
+    </div>
+  ) : null;
 
   // 空状态
   if (history.length === 0) {
@@ -80,12 +166,23 @@ export default function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
+      {/* 搬移訊息 */}
+      {migrateMsg && (
+        <div className="mb-6 rounded-xl bg-emerald-50 px-5 py-3 text-center text-sm text-emerald-800">
+          {migrateMsg}
+        </div>
+      )}
+
+      {/* 登入提示 */}
+      {loginBanner}
+
       {/* 标题 */}
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">📊 测验记录</h1>
           <p className="mt-1 text-sm text-gray-500">
             共 {stats.totalAttempts} 次测验
+            {loggedIn && <span className="ml-2 text-emerald-600">· 雲端同步</span>}
           </p>
         </div>
         <button

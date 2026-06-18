@@ -12,7 +12,7 @@ datasource db {
 }
 
 // ============================================
-// 範例模型 - 可根據你的需求修改
+// 使用者與驗證碼
 // ============================================
 
 model User {
@@ -22,19 +22,43 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // 一對多關聯：一個使用者可以有多篇文章
-  posts Post[]
+  // 一對多關聯
+  otpCodes   OtpCode[]
+  quizRecords QuizRecord[]
 }
 
-model Post {
+/// Email 驗證碼（OTP），有過期時間
+model OtpCode {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
+  email     String
+  code      String
+  /// 驗證碼過期時間
+  expiresAt DateTime
+  /// 是否已使用
+  used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  // 關聯：文章屬於某個使用者
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId String
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String?
+
+  @@index([email, code])
+}
+
+// ============================================
+// 測驗記錄
+// ============================================
+
+model QuizRecord {
+  id        String   @id @default(cuid())
+  /// 完整作答明細（JSON 字串）
+  answers   String
+  score     Int
+  total     Int
+  percentage Int
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@index([userId, createdAt])
 }
