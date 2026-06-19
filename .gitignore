@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 但 .env.example 是範本（不含真實值），需要提交到 git 供他人/Vercel 參考
+!.env.example
 
 # vercel
 .vercel
