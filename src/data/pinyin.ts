@@ -186,6 +186,72 @@ export interface QuizQuestion {
   options: string[];
   answer: number;
   explanation: string;
+  /** 需要朗读的文字（例如句子判断题）；有的话答题画面会显示发音按钮 */
+  audioText?: string;
+}
+
+// ============================================
+// 句子判断题资料库
+// ============================================
+
+export interface SentenceItem {
+  /** 中文句子 */
+  sentence: string;
+  /** 每个字对应的拼音（含声调） */
+  pinyin: string[];
+}
+
+/**
+ * 句子题：挑选某一声母明显出现最多次的句子，
+ * 让学习者朗读后判断哪一个声母出现最多。
+ */
+export const sentences: SentenceItem[] = [
+  { sentence: "爸爸抱宝宝", pinyin: ["bà", "ba", "bào", "bǎo", "bǎo"] },
+  { sentence: "妈妈买毛帽", pinyin: ["mā", "ma", "mǎi", "máo", "mào"] },
+  { sentence: "弟弟读大书", pinyin: ["dì", "di", "dú", "dà", "shū"] },
+  { sentence: "婆婆泼葡萄", pinyin: ["pó", "po", "pō", "pú", "tao"] },
+  { sentence: "哥哥喝果汁", pinyin: ["gē", "ge", "hē", "guǒ", "zhī"] },
+  { sentence: "老虎拉柳树", pinyin: ["lǎo", "hǔ", "lā", "liǔ", "shù"] },
+  { sentence: "他们天天跳舞", pinyin: ["tā", "men", "tiān", "tiān", "tiào", "wǔ"] },
+  { sentence: "公公讲故事", pinyin: ["gōng", "gong", "jiǎng", "gù", "shì"] },
+  { sentence: "姐姐吃鸡翅膀", pinyin: ["jiě", "jie", "chī", "jī", "chì", "bǎng"] },
+  { sentence: "小狗咬骨头", pinyin: ["xiǎo", "gǒu", "yǎo", "gǔ", "tou"] },
+];
+
+/** 去除拼音声调符号（保留字母，ü 转成 v 以利比对） */
+function stripToneMark(p: string): string {
+  return p
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace("ü", "v");
+}
+
+/** 从单字拼音中提取声母；无独立声母（如 a、er）则回传 null */
+function extractInitial(p: string): string | null {
+  const base = stripToneMark(p);
+  // 由长到短比对，确保 zh/ch/sh 优先于 z/c/s
+  const orderedInitials = [...initials].sort(
+    (a, b) => b.pinyin.length - a.pinyin.length
+  );
+  for (const init of orderedInitials) {
+    if (base.startsWith(init.pinyin)) return init.pinyin;
+  }
+  return null;
+}
+
+/** 统计句子中每个声母出现次数，回传「出现最多声母」与其次数 */
+function countMostCommonInitial(
+  pinyinList: string[]
+): { initial: string; count: number; all: Record<string, number> } | null {
+  const counts: Record<string, number> = {};
+  for (const p of pinyinList) {
+    const init = extractInitial(p);
+    if (init) counts[init] = (counts[init] || 0) + 1;
+  }
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return null;
+  const [initial, count] = entries[0];
+  return { initial, count, all: counts };
 }
 
 /** 生成随机测验题目 */
@@ -223,6 +289,33 @@ export function generateQuiz(): QuizQuestion[] {
       options,
       answer: options.indexOf(tone.name),
       explanation: `「${tone.example}」读作「${tone.examplePinyin}」，是${tone.name}`,
+    });
+  }
+
+  // 题目类型 3：句子判断（哪一个声母出现最多）
+  const sentenceSample = [...sentences].sort(() => Math.random() - 0.5).slice(0, 2);
+  for (const s of sentenceSample) {
+    const result = countMostCommonInitial(s.pinyin);
+    if (!result) continue;
+    const { initial: mostCommon, count, all } = result;
+
+    // 干扰项优先取句中其他声母，不足再从常用声母补足
+    const distractorPool = Object.keys(all).filter((k) => k !== mostCommon);
+    const filler = initials
+      .map((i) => i.pinyin)
+      .filter((p) => p !== mostCommon && !distractorPool.includes(p));
+    while (distractorPool.length < 3 && filler.length) {
+      distractorPool.push(filler.shift()!);
+    }
+    const distractors = distractorPool.sort(() => Math.random() - 0.5).slice(0, 3);
+
+    const options = [...distractors, mostCommon].sort(() => Math.random() - 0.5);
+    questions.push({
+      question: `请朗读句子，选出出现最多的声母：「${s.sentence}」`,
+      options,
+      answer: options.indexOf(mostCommon),
+      explanation: `「${s.sentence}」（${s.pinyin.join(" ")}）中，「${mostCommon}」出现了 ${count} 次，是最多的声母`,
+      audioText: s.sentence,
     });
   }
 

@@ -6,6 +6,7 @@ import { generateQuiz } from "@/data/pinyin";
 import type { QuizQuestion } from "@/data/pinyin";
 import { saveQuizRecord, type QuizAnswerRecord } from "@/lib/quiz-history";
 import { saveQuizRecordCloud } from "@/lib/quiz-history-cloud";
+import PronounceButton from "@/components/PronounceButton";
 
 export default function QuizPage() {
   const [questions, setQuestions] = useState<QuizQuestion[] | null>(null);
@@ -99,7 +100,7 @@ export default function QuizPage() {
         <div className="mb-6 text-6xl">✏️</div>
         <h1 className="mb-4 text-4xl font-bold text-gray-900">拼音测验</h1>
         <p className="mb-8 max-w-md text-lg text-gray-500">
-          测验包含声母配对和声调辨别题目，共 8 题。
+          测验包含声母配对、声调辨别与句子判断题目，共 10 题。
           看看你能答对几题！
         </p>
         <button
@@ -112,7 +113,7 @@ export default function QuizPage() {
         <div className="mt-10 grid w-full grid-cols-3 gap-4 text-center">
           <div className="rounded-xl bg-gray-50 p-4">
             <div className="text-2xl">📝</div>
-            <div className="mt-2 text-sm text-gray-500">8 道题目</div>
+            <div className="mt-2 text-sm text-gray-500">10 道题目</div>
           </div>
           <div className="rounded-xl bg-gray-50 p-4">
             <div className="text-2xl">🎯</div>
@@ -252,6 +253,12 @@ export default function QuizPage() {
         <h2 className="text-2xl font-bold leading-relaxed text-gray-900">
           {question.question}
         </h2>
+        {question.audioText && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+            <PronounceButton text={question.audioText} size="sm" />
+            <span>点按钮听句子，自己朗读后判断</span>
+          </div>
+        )}
       </div>
 
       {/* 选项 */}
