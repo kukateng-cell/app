@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSpeechSettings } from "./SpeechSettingsContext";
 
 interface PronounceButtonProps {
   /** 要朗读的拼音或文字 */
@@ -20,6 +21,7 @@ export default function PronounceButton({
   className = "",
 }: PronounceButtonProps) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const { rate } = useSpeechSettings();
 
   const handleSpeak = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -28,7 +30,7 @@ export default function PronounceButton({
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "zh-CN";
-    utterance.rate = 0.8;
+    utterance.rate = rate;
 
     utterance.onstart = () => setIsPlaying(true);
     utterance.onend = () => setIsPlaying(false);

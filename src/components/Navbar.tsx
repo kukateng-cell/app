@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import SpeedControl from "./SpeedControl";
 
 const navLinks = [
   { href: "/", label: "首页" },
@@ -62,6 +63,11 @@ export default function Navbar() {
             );
           })}
 
+          {/* 語速控制 */}
+          <div className="ml-1 md:block hidden">
+            <SpeedControl />
+          </div>
+
           {/* 登入 / 使用者區塊 */}
           {user.loggedIn ? (
             <div className="ml-2 flex items-center gap-2 border-l border-gray-200 pl-3">
@@ -103,6 +109,11 @@ export default function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="border-t border-gray-100 bg-white md:hidden">
+          {/* 語速控制（手機版） */}
+          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <span className="text-sm font-medium text-gray-600">語速</span>
+            <SpeedControl />
+          </div>
           {navLinks.map((link) => {
             const isActive =
               link.href === "/"

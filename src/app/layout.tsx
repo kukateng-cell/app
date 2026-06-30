@@ -3,6 +3,7 @@ import { Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { SpeechSettingsProvider } from "@/components/SpeechSettingsContext";
 
 const notoSansTC = Noto_Sans_TC({
   variable: "--font-noto-sans-tc",
@@ -26,9 +27,11 @@ export default function RootLayout({
       className={`${notoSansTC.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-gray-50 font-sans">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <SpeechSettingsProvider>
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </SpeechSettingsProvider>
       </body>
     </html>
   );
