@@ -321,3 +321,78 @@ export function generateQuiz(): QuizQuestion[] {
 
   return questions.sort(() => Math.random() - 0.5);
 }
+
+// ============================================
+// 今日拼音（依日期轮换）
+// ============================================
+
+/** 今日拼音所属分类（声调不参与轮换，因为结构不同） */
+export type PinyinCategory = "initials" | "finals" | "wholeSyllables";
+
+/** 今日拼音结果 */
+export interface DailyPinyin {
+  /** 选中项（声母/韵母/整体认读；声调不参与轮换，因为结构不同） */
+  item: PinyinItem;
+  /** 所属分类 */
+  category: PinyinCategory;
+  /** 分类中文名称 */
+  categoryLabel: string;
+  /** 对应学习页路径 */
+  href: string;
+  /** 日期字串（YYYY-MM-DD，UTC） */
+  date: string;
+}
+
+/** 池中单笔的型别 */
+interface DailyPoolEntry {
+  readonly item: PinyinItem;
+  readonly category: PinyinCategory;
+  readonly categoryLabel: string;
+  readonly href: string;
+}
+
+/** 所有可轮换的拼音卡（依固定順序，确保日期映射稳定；唯读以防误改） */
+const DAILY_POOL: readonly DailyPoolEntry[] = [
+  ...initials.map((item) => ({ item, category: "initials" as const, categoryLabel: "声母", href: "/learn/initials" })),
+  ...finals.map((item) => ({ item, category: "finals" as const, categoryLabel: "韵母", href: "/learn/finals" })),
+  ...wholeSyllables.map((item) => ({ item, category: "wholeSyllables" as const, categoryLabel: "整体认读音节", href: "/learn/syllables" })),
+];
+
+/**
+ * 依日期取得「今日拼音」。
+ *
+ * 采用 UTC 日期作为种子，确保：
+ *  - 同一天所有使用者看到同一个拼音（具教学/社群一致性）
+ *  - Server 与 Client 渲染结果一致，避免 hydration mismatch
+ *  - 每天自动轮换，DAILY_POOL.length 天为一个循环
+ *
+ * @param date 参考日期（预设为「现在」）；可传入特定日期以利测试
+ */
+export function getDailyPinyin(date: Date = new Date()): DailyPinyin {
+  const pool = DAILY_POOL;
+  if (pool.length === 0) {
+    throw new Error(
+      "getDailyPinyin：DAILY_POOL 为空，请确认 initials/finals/wholeSyllables 资料已载入"
+    );
+  }
+
+  // 以 UTC 日期组成 YYYY-MM-DD，作为稳定的天序号种子
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+
+  // 将日期转成一个整数序号：自 1970-01-01 (UTC) 起的天数
+  const epochMs = Date.UTC(yyyy, date.getUTCMonth(), date.getUTCDate());
+  const dayIndex = Math.floor(epochMs / (24 * 60 * 60 * 1000));
+
+  const selected = pool[((dayIndex % pool.length) + pool.length) % pool.length];
+
+  return {
+    item: selected.item,
+    category: selected.category,
+    categoryLabel: selected.categoryLabel,
+    href: selected.href,
+    date: dateStr,
+  };
+}

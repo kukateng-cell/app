@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { initials, finals, wholeSyllables, tones } from "@/data/pinyin";
+import DailyPinyinCard from "@/components/DailyPinyinCard";
+
+// 「今日拼音」依當下日期選取，需每次請求重新渲染，
+// 否則靜態建置會把當天的拼音「凍結」直到下次部署。
+export const revalidate = 0;
 
 const features = [
   {
@@ -77,6 +82,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* 今日拼音（依日期轮换） */}
+      <DailyPinyinCard />
+
       {/* Features Grid */}
       <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:py-24">
         <div className="mb-12 text-center">
